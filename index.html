@@ -1,1 +1,191 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ブルアカ逆アキネイターAI</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            background-color: #f4f6f9;
+            color: #333;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            text-align: center;
+            color: #2c3e50;
+        }
+        #setup-screen, #chat-screen {
+            background: #fff;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        #chat-screen {
+            display: none;
+        }
+        #chat-box {
+            height: 400px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            overflow-y: scroll;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+        .message {
+            margin-bottom: 10px;
+            line-height: 1.4;
+        }
+        .message.user {
+            text-align: right;
+            color: #2980b9;
+        }
+        .message.ai {
+            text-align: left;
+            color: #27ae60;
+        }
+        .input-area {
+            display: flex;
+            gap: 10px;
+        }
+        input[type="text"], input[type="password"] {
+            flex: 1;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            background: #3498db;
+            color: #fff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #2980b9;
+        }
+    </style>
+</head>
+<body>
 
+    <h1>ブルーアーカイブ 逆アキネイターAI</h1>
+
+    <!-- APIキー設定画面 -->
+    <div id="setup-screen">
+        <p>Gemini APIキーを入力してゲームを始めてね（ブラウザ内にのみ保存され、外部には送信されません）。</p>
+        <input type="password" id="api-key-input" placeholder="AIzaSy... (Gemini API Key)">
+        <button onclick="startGame()">ゲームスタート</button>
+    </div>
+
+    <!-- チャット画面 -->
+    <div id="chat-screen">
+        <div id="chat-box"></div>
+        <div class="input-area">
+            <input type="text" id="user-input" placeholder="例：ヘイローは輪っかですか？" onkeypress="handleKeyPress(event)">
+            <button onclick="sendMessage()">送信</button>
+        </div>
+    </div>
+
+    <script>
+        let apiKey = "";
+        let chatHistory = [];
+
+        const systemPrompt = `
+あなたは「ブルーアーカイブ（ブルアカ）」の逆アキネイターの出題者AIです。
+キヴォトスのプレイアブル生徒からランダムに1人を心の中で密かに選んでください（ユーザーには絶対に最初に生徒名を教えないこと）。
+
+【ルール】
+- ユーザーからの質問に対し、選んだ生徒の公式設定に基づいて「はい」「いいえ」「どちらとも言えない」「関係ない」などを交えつつ、簡潔に回答してください。
+- ユーザーが「〇〇ちゃん？」などと生徒の名前を挙げて当てにきた場合、正解なら「正解です！お見事！」、不正解なら「違います、違いますよ〜」と判定してください。
+- 最初のメッセージでは、生徒を1人選んだことを告げ、「さあ、質問をどうぞ！」と促してください。
+`;
+
+        async function startGame() {
+            apiKey = document.getElementById("api-key-input").value.trim();
+            if (!apiKey) {
+                alert("APIキーを入力してください！");
+                return;
+            }
+
+            document.getElementById("setup-screen").style.display = "none";
+            document.getElementById("chat-screen").style.display = "block";
+
+            // 初期化メッセージ
+            chatHistory = [
+                { role: "user", parts: [{ text: systemPrompt + "\n\nそれではゲームを開始してください。最初の挨拶と出題の準備完了を伝えてください。" }] }
+            ];
+
+            await callGeminiAPI(true);
+        }
+
+        async function sendMessage() {
+            const inputField = document.getElementById("user-input");
+            const text = inputField.value.trim();
+            if (!text) return;
+
+            appendMessage(text, "user");
+            inputField.value = "";
+
+            chatHistory.push({ role: "user", parts: [{ text: text }] });
+            await callGeminiAPI(false);
+        }
+
+        function handleKeyPress(e) {
+            if (e.key === "Enter") {
+                sendMessage();
+            }
+        }
+
+        function appendMessage(text, sender) {
+            const chatBox = document.getElementById("chat-box");
+            const div = document.createElement("div");
+            div.className = `message ${sender}`;
+            div.innerHTML = `<strong>${sender === 'user' ? 'あなた' : 'AI'}:</strong> ${escapeHTML(text)}`;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function callGeminiAPI(isInit) {
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${apiKey}`;
+            
+            try {
+                const response = await fetch(url, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ contents: chatHistory })
+                });
+
+                const data = await response.json();
+                
+                if (data.error) {
+                    appendMessage("エラーが発生しました: " + data.error.message, "ai");
+                    return;
+                }
+
+                const aiResponse = data.candidates[0].content.parts[0].text;
+                chatHistory.push({ role: "model", parts: [{ text: aiResponse }] });
+
+                if (!isInit) {
+                    appendMessage(aiResponse, "ai");
+                } else {
+                    // 初期化時のAIの最初の発言だけ少し調整して表示
+                    appendMessage(aiResponse, "ai");
+                }
+
+            } catch (err) {
+                appendMessage("通信エラーが発生しました。", "ai");
+                console.error(err);
+            }
+        }
+
+        function escapeHTML(str) {
+            return str.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+        }
+    </script>
+</body>
+</html>
