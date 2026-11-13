@@ -151,7 +151,8 @@
         }
 
         async function callGeminiAPI(isInit) {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=${apiKey}`;
+            const url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key=" + encodeURIComponent(apiKey);
+            
             try {
                 const response = await fetch(url, {
                     method: "POST",
@@ -162,22 +163,16 @@
                 const data = await response.json();
                 
                 if (data.error) {
-                    appendMessage("エラーが発生しました: " + data.error.message, "ai");
+                    appendMessage("APIエラー: " + data.error.message, "ai");
                     return;
                 }
 
                 const aiResponse = data.candidates[0].content.parts[0].text;
                 chatHistory.push({ role: "model", parts: [{ text: aiResponse }] });
-
-                if (!isInit) {
-                    appendMessage(aiResponse, "ai");
-                } else {
-                    // 初期化時のAIの最初の発言だけ少し調整して表示
-                    appendMessage(aiResponse, "ai");
-                }
+                appendMessage(aiResponse, "ai");
 
             } catch (err) {
-                appendMessage("通信エラーが発生しました。", "ai");
+                appendMessage("通信エラー詳細: " + err.message, "ai");
                 console.error(err);
             }
         }
